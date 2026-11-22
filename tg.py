@@ -363,3 +363,109 @@ async def handle_message(msg:dict):
                 if line and len(line)>=40 and not line.lower().endswith("none"):ids.append(line)
         elif text:
             for line in text.split
+                        for line in text.splitlines():
+                line = line.strip()
+                if line and len(line) >= 40 and not line.lower().endswith("none"):
+                    ids.append(line)
+
+        if not ids:
+            await TG_API.send_message(chat_id, "❌ No valid Device IDs found\\.", kb_back())
+            return
+
+        sess.extra["pending_ids"] = ids
+        sess.action = f"run_concurrency:{action}"
+        sess.state = "waiting_input"
+        await TG_API.send_message(chat_id, f"📦 *Loaded {len(ids):,} IDs*\n\nEnter concurrency \\(default `200`, max `2000`\\):", kb_back())
+        return
+
+    if action.startswith("run_concurrency:"):
+        _, real_action = action.split(":", 1)
+        ids = sess.extra.get("pending_ids") or []
+        try: concurrency = int(text)
+        except ValueError: concurrency = 200
+        concurrency = max(1, min(2000, concurrency))
+        sess.extra.pop("pending_ids", None)
+        await start_bulk(chat_id, user_id, sess, real_action, ids, concurrency)
+        return
+
+    if action == "single":
+        sess.state = "idle"; sess.action = None
+        await do_single_check(chat_id, text)
+        return
+
+    if action == "createdate":
+        sess.state = "idle"; sess.action = None
+        await do_createdate(chat_id, text)
+        return
+
+    if action == "bancheck":
+        sess.state = "idle"; sess.action = None
+        await do_bancheck(chat_id, text)
+        return
+
+    if action == "brute_input":
+        sess.extra["brute_target"] = text
+        sess.state = "idle"
+        await TG_API.send_message(chat_id, f"🎯 Target: `{md(text[:40])}{'...' if len(text) > 40 else ''}`\n\nChoose kick mode:", kb_brute_mode())
+        return
+
+    if action.startswith("gen_count:"):
+        gt = action.split(":", 1)[1]
+        raw = text.lower()
+        try:
+            if raw.endswith("k"): n = int(float(raw[:-1]) * 1000)
+            elif raw.endswith("m"): n = int(float(raw[:-1]) * 1_000_000)
+            else: n = int(raw)
+        except ValueError:
+            await TG_API.send_message(chat_id, "❌ Invalid number\\. Try `1000` or `10k`\\.", kb_back())
+            return
+        if n <= 0 or n > 5_000_000:
+            await TG_API.send_message(chat_id, "❌ Range: 1 to 5,000,000\\.", kb_back())
+            return
+        sess.state = "idle"; sess.action = None
+        await do_generate(chat_id, sess, gt, n)
+        return
+
+async def poll_loop():
+    offset = 0
+    print("✅ Bot polling started")
+    while True:
+        try:
+            updates = await TG_API.get_updates(offset=offset)
+            for upd in updates:
+                offset = upd["update_id"] + 1
+                try:
+                    if "callback_query" in upd:
+                        asyncio.create_task(handle_callback(upd["callback_query"]))
+                    elif "message" in upd:
+                        asyncio.create_task(handle_message(upd["message"]))
+                except Exception:
+                    traceback.print_exc()
+        except asyncio.CancelledError:
+            break
+        except Exception:
+            traceback.print_exc()
+            await asyncio.sleep(2)
+
+async def main():
+    if not BOT_TOKEN or BOT_TOKEN == "YOUR_BOT_TOKEN_HERE":
+        print("❌ Set TG_BOT_TOKEN env var.")
+        return
+    await TG_API.start()
+    me = await TG_API._call("getMe")
+    if not me.get("ok"):
+        print(f"❌ Bot auth failed: {me.get('description')}")
+        return
+    print(f"✅ Logged in as @{me['result']['username']}")
+    try:
+        await poll_loop()
+    except KeyboardInterrupt:
+        print("\n🛑 Stopping...")
+    finally:
+        await TG_API.close()
+
+if __name__ == "__main__":
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("\n🛑 Stopped")
