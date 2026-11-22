@@ -363,9 +363,9 @@ async def handle_message(msg:dict):
                 if line and len(line)>=40 and not line.lower().endswith("none"):ids.append(line)
         elif text:
                         for line in text.splitlines():
-                line = line.strip()
-                if line and len(line) >= 40 and not line.lower().endswith("none"):
-                    ids.append(line)
+    line = line.strip()
+    if line and len(line) >= 40 and not line.lower().endswith("none"):
+        ids.append(line)
 
         if not ids:
             await TG_API.send_message(chat_id, "❌ No valid Device IDs found\\.", kb_back())
