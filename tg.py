@@ -362,8 +362,11 @@ async def handle_message(msg:dict):
                 line=line.strip()
                 if line and len(line)>=40 and not line.lower().endswith("none"):ids.append(line)
         elif text:
-                        for line in text.splitlines():
-    line = line.strip()
+                        elif text:
+    for line in text.splitlines():
+        line = line.strip()
+        if line and len(line) >= 40 and not line.lower().endswith("none"):
+            ids.append(line)
     if line and len(line) >= 40 and not line.lower().endswith("none"):
         ids.append(line)
 
